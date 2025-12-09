@@ -1,4 +1,8 @@
 node_modules
-sessions/*.json
-sessions/*.auth.json
 .env
+.DS_Store
+sessions/*.auth.json
+sessions/*.key
+npm-debug.log
+.vscode
+.idea

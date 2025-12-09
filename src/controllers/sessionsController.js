@@ -1,28 +1,44 @@
-import {
-  startSession,
-  getState
-} from "../services/sessionService.js";
+import * as sessionService from "../services/sessionService.js";
 
-export const createSession = async (req, res) => {
+export async function createSession(req, res) {
   try {
-    const { id } = req.body;
-
-    const qr = await startSession(id);
-    return res.status(200).json({ qrcode: qr });
-
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+    const name = (req.body && req.body.name) || "session";
+    const session = await sessionService.createSession({ name });
+    return res.status(201).json(session);
+  } catch (err) {
+    console.error("createSession error:", err);
+    return res.status(500).json({ error: "Erro ao criar sessão" });
   }
-};
+}
 
-export const getSessionStatus = async (req, res) => {
+export async function getSessionStatus(req, res) {
   try {
     const { id } = req.params;
-
-    const state = await getState(id);
-    return res.status(200).json({ state });
-
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+    const session = sessionService.getSession(id);
+    if (!session) return res.status(404).json({ error: "Sessão não encontrada" });
+    return res.json(session);
+  } catch (err) {
+    console.error("getSessionStatus error:", err);
+    return res.status(500).json({ error: "Erro ao buscar status" });
   }
-};
+}
+
+export async function getSessionQr(req, res) {
+  try {
+    const { id } = req.params;
+    const session = sessionService.getSession(id);
+    if (!session) return res.status(404).json({ error: "Sessão não encontrada" });
+
+    // pede ao service o buffer PNG (se existir)
+    const pngBuffer = await sessionService.getSessionQrPngBuffer(id);
+    if (!pngBuffer) {
+      return res.status(404).json({ error: "QR não disponível" });
+    }
+
+    res.setHeader("Content-Type", "image/png");
+    return res.send(pngBuffer);
+  } catch (err) {
+    console.error("getSessionQr error:", err);
+    return res.status(500).json({ error: "Erro ao gerar QR" });
+  }
+}
