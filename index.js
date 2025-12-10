@@ -1,5 +1,5 @@
 import express from "express";
-import sessionRoutes from "./routes/sessionRoutes.js"; // <- CORRETO PARA O RENDER
+import sessionRoutes from "./src/routes/sessionRoutes.js";
 
 const app = express();
 app.use(express.json());
