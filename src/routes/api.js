@@ -1,10 +1,9 @@
 import { Router } from "express";
-// Importamos direto do Service (Certifique-se que a pasta 'services' está minúscula também!)
 import { createSessionService, getSessionStatusService, getQRService } from "../services/sessionService.js";
 
 const router = Router();
 
-// --- LÓGICA DO CONTROLLER (Agora aqui dentro para não dar erro de import) ---
+// --- LÓGICA DO CONTROLLER EMBUTIDA (Para não dar erro de arquivo não encontrado) ---
 
 const createSession = async (req, res) => {
     try {
