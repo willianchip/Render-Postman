@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: evolution-lite-whatsapp
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: PORT
+        value: 10000
