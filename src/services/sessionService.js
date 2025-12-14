@@ -1,7 +1,5 @@
-// src/services/sessionService.js
 import { makeWASocket, useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys";
 import QRCode from "qrcode";
-// Importamos do store universal que criamos
 import { saveSession, getSession, deleteSession } from "../utils/sessionStore.js";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
@@ -11,10 +9,13 @@ if (!fs.existsSync("sessions")) {
     fs.mkdirSync("sessions");
 }
 
-// --- FUNÇÃO 1: CRIAR SESSÃO ---
 export const createSessionService = async (name) => {
-    // Se o usuário não mandou nome, cria um ID aleatório
+    // LOG 1: Vamos ver o que chegou aqui
+    console.log(`[DEBUG] Pedido de criação recebido. Nome enviado: '${name}'`);
+
     const id = name || uuidv4(); 
+    console.log(`[DEBUG] ID Final da sessão será: '${id}'`);
+
     const sessionPath = `sessions/${id}`;
 
     if (!fs.existsSync(sessionPath)) {
@@ -25,12 +26,11 @@ export const createSessionService = async (name) => {
 
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false,
+        printQRInTerminal: true, // Mudamos para true para ver se aparece no log do Render
         browser: ["Render-Postman", "Chrome", "1.0.0"],
         connectTimeoutMs: 60000
     });
 
-    // Salva estado inicial
     saveSession(id, { name: id, sock, qr: null, status: 'INITIALIZING' });
 
     sock.ev.on("creds.update", saveCreds);
@@ -39,36 +39,45 @@ export const createSessionService = async (name) => {
         const { qr, connection, lastDisconnect } = update;
 
         if (qr) {
-            console.log(`QR Gerado para ${id}`);
-            const qrBuffer = await QRCode.toBuffer(qr);
-            saveSession(id, { qr: qrBuffer, status: 'QR_READY' });
+            console.log(`[DEBUG] 🔥 QR CODE GERADO PELO BAILEYS PARA: ${id}`);
+            try {
+                const qrBuffer = await QRCode.toBuffer(qr);
+                saveSession(id, { qr: qrBuffer, status: 'QR_READY' });
+                console.log(`[DEBUG] ✅ QR Code salvo na memória com sucesso!`);
+            } catch (err) {
+                console.error(`[DEBUG] ❌ Erro ao converter QR Code:`, err);
+            }
         }
 
         if (connection === "open") {
-            console.log(`Conectado: ${id}`);
+            console.log(`[DEBUG] 🚀 Conexão estabelecida: ${id}`);
             saveSession(id, { status: 'CONNECTED', qr: null });
         }
 
         if (connection === "close") {
             const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log(`Conexão fechada (${id}). Reconectando: ${shouldReconnect}`);
+            console.log(`[DEBUG] ⚠️ Conexão fechada (${id}). Reconectar? ${shouldReconnect}`);
             if (!shouldReconnect) {
                 deleteSession(id);
             }
         }
     });
 
-    return { id, status: 'INITIALIZING' };
+    return { id, status: 'INITIALIZING', message: "Verifique os logs do Render para ver o progresso." };
 };
 
-// --- FUNÇÃO 2: PEGAR QR CODE ---
 export const getQRService = (id) => {
     const session = getSession(id);
-    if (!session) return null;
-    return session.qr; // Retorna o Buffer da imagem
+    if (!session) {
+        console.log(`[DEBUG] Tentativa de pegar QR para '${id}' falhou. Sessão não encontrada na memória.`);
+        return null;
+    }
+    if (!session.qr) {
+        console.log(`[DEBUG] Sessão '${id}' encontrada, mas QR Code ainda é null.`);
+    }
+    return session.qr;
 };
 
-// --- FUNÇÃO 3: PEGAR STATUS ---
 export const getSessionStatusService = (id) => {
     const session = getSession(id);
     if (!session) return { status: "NOT_FOUND" };
