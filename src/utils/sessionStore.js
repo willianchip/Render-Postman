@@ -1,15 +1,13 @@
-// src/utils/sessionStore.js
 const sessions = new Map();
 
-// A função principal de salvar/atualizar
-export const updateSession = (id, data) => {
+// Exportamos com os dois nomes para evitar confusão de importação
+export const saveSession = (id, data) => {
   const existing = sessions.get(id) || {};
   sessions.set(id, { ...existing, ...data });
 };
 
-// Criamos um "apelido" para ela. 
-// Se algum arquivo chamar "saveSession" ou "updateSession", ambos funcionam.
-export const saveSession = updateSession;
+// Se alguém chamar updateSession, usa a mesma lógica
+export const updateSession = saveSession;
 
 export const getSession = (id) => {
   return sessions.get(id);
