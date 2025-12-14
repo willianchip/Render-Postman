@@ -10,12 +10,11 @@ if (!fs.existsSync("sessions")) {
 }
 
 export const createSessionService = async (name) => {
-    // LOG 1: Vamos ver o que chegou aqui
-    console.log(`[DEBUG] Pedido de criação recebido. Nome enviado: '${name}'`);
+    // LOG IMPORTANTE: Vamos ver se o código novo está rodando
+    console.log(`[DEBUG] CÓDIGO NOVO RODANDO! Pedido recebido para: '${name}'`);
 
     const id = name || uuidv4(); 
-    console.log(`[DEBUG] ID Final da sessão será: '${id}'`);
-
+    
     const sessionPath = `sessions/${id}`;
 
     if (!fs.existsSync(sessionPath)) {
@@ -26,7 +25,7 @@ export const createSessionService = async (name) => {
 
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true, // Mudamos para true para ver se aparece no log do Render
+        printQRInTerminal: true,
         browser: ["Render-Postman", "Chrome", "1.0.0"],
         connectTimeoutMs: 60000
     });
@@ -39,42 +38,34 @@ export const createSessionService = async (name) => {
         const { qr, connection, lastDisconnect } = update;
 
         if (qr) {
-            console.log(`[DEBUG] 🔥 QR CODE GERADO PELO BAILEYS PARA: ${id}`);
-            try {
-                const qrBuffer = await QRCode.toBuffer(qr);
-                saveSession(id, { qr: qrBuffer, status: 'QR_READY' });
-                console.log(`[DEBUG] ✅ QR Code salvo na memória com sucesso!`);
-            } catch (err) {
-                console.error(`[DEBUG] ❌ Erro ao converter QR Code:`, err);
-            }
+            console.log(`[DEBUG] 🔥 QR CODE GERADO: ${id}`);
+            const qrBuffer = await QRCode.toBuffer(qr);
+            saveSession(id, { qr: qrBuffer, status: 'QR_READY' });
         }
 
         if (connection === "open") {
-            console.log(`[DEBUG] 🚀 Conexão estabelecida: ${id}`);
+            console.log(`[DEBUG] 🚀 CONECTADO: ${id}`);
             saveSession(id, { status: 'CONNECTED', qr: null });
         }
 
         if (connection === "close") {
-            const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log(`[DEBUG] ⚠️ Conexão fechada (${id}). Reconectar? ${shouldReconnect}`);
-            if (!shouldReconnect) {
-                deleteSession(id);
-            }
+           // Lógica simples de desconexão
+           console.log(`[DEBUG] Fechou. Reiniciando...`);
+           deleteSession(id);
         }
     });
 
-    return { id, status: 'INITIALIZING', message: "Verifique os logs do Render para ver o progresso." };
+    // RESPOSTA NOVA PARA PROVAR QUE ATUALIZOU
+    return { 
+        id, 
+        status: 'INITIALIZING', 
+        message: "AGORA SIM! O código foi atualizado." 
+    };
 };
 
 export const getQRService = (id) => {
     const session = getSession(id);
-    if (!session) {
-        console.log(`[DEBUG] Tentativa de pegar QR para '${id}' falhou. Sessão não encontrada na memória.`);
-        return null;
-    }
-    if (!session.qr) {
-        console.log(`[DEBUG] Sessão '${id}' encontrada, mas QR Code ainda é null.`);
-    }
+    if (!session) return null;
     return session.qr;
 };
 
