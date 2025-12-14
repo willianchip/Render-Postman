@@ -1,10 +1,10 @@
 import { Router } from "express";
-// Importa do Service Unificado
-import { createSessionService, getQRService, getSessionStatusService } from "../services/sessionService.js";
+// AQUI ESTÁ A CORREÇÃO: Apontando para o arquivo que você editou (whatsappService.js)
+import { createSessionService, getQRService, getSessionStatusService } from "../services/whatsappService.js";
 
 const router = Router();
 
-// Rota: POST /api/session/create
+// Rota 1: Criar Sessão
 router.post("/create", async (req, res) => {
     try {
         const { sessionName } = req.body;
@@ -15,7 +15,7 @@ router.post("/create", async (req, res) => {
     }
 });
 
-// Rota: GET /api/session/{nome}/qr
+// Rota 2: Pegar QR Code
 router.get("/:sessionName/qr", (req, res) => {
     const { sessionName } = req.params;
     const qrBuffer = getQRService(sessionName);
@@ -28,7 +28,7 @@ router.get("/:sessionName/qr", (req, res) => {
     res.send(qrBuffer);
 });
 
-// Rota: GET /api/session/{nome}/status
+// Rota 3: Pegar Status
 router.get("/:sessionName/status", (req, res) => {
     const { sessionName } = req.params;
     const status = getSessionStatusService(sessionName);
