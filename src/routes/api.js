@@ -1,11 +1,13 @@
 import { Router } from "express";
+// Importamos APENAS o service, que sabemos que funciona
 import { createSessionService, getSessionStatusService, getQRService } from "../services/sessionService.js";
 
 const router = Router();
 
-// --- LÓGICA DO CONTROLLER EMBUTIDA (Para não dar erro de arquivo não encontrado) ---
+// --- SOLUÇÃO UNIFICADA: Lógica direto na rota para evitar erro de arquivo não encontrado ---
 
-const createSession = async (req, res) => {
+// 1. Criar Sessão
+router.post("/create", async (req, res) => {
     try {
         const { sessionName } = req.body;
         if (!sessionName) return res.status(400).json({ error: "Nome da sessão (sessionName) é obrigatório" });
@@ -16,30 +18,34 @@ const createSession = async (req, res) => {
         console.error(error);
         res.status(500).json({ error: "Erro interno ao criar sessão" });
     }
-};
+});
 
-const getStatus = (req, res) => {
-    const { sessionName } = req.params;
-    const status = getSessionStatusService(sessionName);
-    res.json(status);
-};
-
-const getQR = (req, res) => {
-    const { sessionName } = req.params;
-    const qrBuffer = getQRService(sessionName);
-
-    if (!qrBuffer) {
-        return res.status(404).json({ error: "QR Code não disponível (Sessão não existe ou já conectada)" });
+// 2. Status
+router.get("/:sessionName/status", async (req, res) => {
+    try {
+        const { sessionName } = req.params;
+        const status = await getSessionStatusService(sessionName);
+        res.json({ status });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
+});
 
-    res.setHeader("Content-Type", "image/png");
-    res.send(qrBuffer);
-};
+// 3. QR Code
+router.get("/:sessionName/qr", async (req, res) => {
+    try {
+        const { sessionName } = req.params;
+        const qrBuffer = await getQRService(sessionName);
 
-// --- DEFINIÇÃO DAS ROTAS ---
+        if (!qrBuffer) {
+            return res.status(404).json({ error: "QR Code não disponível (Sessão não existe ou já conectada)" });
+        }
 
-router.post("/create", createSession);
-router.get("/:sessionName/status", getStatus);
-router.get("/:sessionName/qr", getQR);
+        res.setHeader("Content-Type", "image/png");
+        res.send(qrBuffer);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 export default router;
