@@ -1,12 +1,16 @@
+// src/utils/sessionStore.js
 const sessions = new Map();
 
-// Exportamos com os dois nomes para evitar confusão de importação
+// A função original
 export const saveSession = (id, data) => {
   const existing = sessions.get(id) || {};
   sessions.set(id, { ...existing, ...data });
 };
 
-// Se alguém chamar updateSession, usa a mesma lógica
+// --- AQUI ESTÁ O TRUQUE ---
+// Criamos apelidos para a mesma função.
+// Assim, se o código pedir "addSession" ou "updateSession", vai funcionar.
+export const addSession = saveSession;
 export const updateSession = saveSession;
 
 export const getSession = (id) => {
