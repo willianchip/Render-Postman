@@ -1,13 +1,14 @@
 import express from "express";
 import cors from "cors";
-// AQUI ESTÁ A MUDANÇA: Apontamos para sessionRoutes.js
-import sessionRoutes from "./src/routes/sessionRoutes.js"; 
+
+// CORREÇÃO AQUI: Apontamos para o arquivo REAL que você tem no GitHub
+import sessionRoutes from "./src/routes/api.js"; 
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Rota base
+// A rota continua sendo /api/session
 app.use("/api/session", sessionRoutes);
 
 const PORT = process.env.PORT || 10000;
