@@ -5,32 +5,37 @@ import QRCode from "qrcode";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 
-// --- CONFIGURAÇÃO DO SERVIDOR ---
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- BANCO DE DADOS NA MEMÓRIA ---
-// Guarda: { id, sock, qr, status }
+// --- MEMÓRIA VOLÁTIL ---
 const sessoes = new Map();
 
-// --- LÓGICA DO BAILEYS (WHATSAPP) ---
+// --- FUNÇÃO DE LIMPEZA E INÍCIO ---
 async function criarSessao(id) {
-    // Garante pasta sessions
-    if (!fs.existsSync("sessions")) fs.mkdirSync("sessions");
+    // 1. LIMPEZA DE SUJEIRA (CRUCIAL):
+    // Se a pasta da sessão já existe, DELETA ela para forçar um QR novo.
     const sessionPath = `sessions/${id}`;
-    if (!fs.existsSync(sessionPath)) fs.mkdirSync(sessionPath, { recursive: true });
+    if (fs.existsSync(sessionPath)) {
+        console.log(`[LIMPEZA] Apagando sessão antiga/suja de: ${id}`);
+        fs.rmSync(sessionPath, { recursive: true, force: true });
+    }
+
+    // 2. Cria a pasta nova do zero
+    if (!fs.existsSync("sessions")) fs.mkdirSync("sessions");
+    // Não precisa criar a subpasta sessionPath manualmente, o Baileys cria.
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
     const sock = makeWASocket({
         auth: state,
         printQRInTerminal: true,
-        browser: ["Render-API", "Chrome", "1.0.0"],
+        browser: ["Render-Limpo", "Chrome", "1.0.0"],
         connectTimeoutMs: 60000
     });
 
-    // Salva estado inicial
+    // Salva na memória
     sessoes.set(id, { sock, qr: null, status: 'INITIALIZING' });
 
     sock.ev.on("creds.update", saveCreds);
@@ -39,81 +44,76 @@ async function criarSessao(id) {
         const { qr, connection, lastDisconnect } = update;
 
         if (qr) {
-            console.log(`[QR] Novo QR gerado para: ${id}`);
+            console.log(`[NOVO QR] Gerado com sucesso para: ${id}`);
             const qrBuffer = await QRCode.toBuffer(qr);
             
-            // Atualiza na memória
+            // Atualiza memória
             const atual = sessoes.get(id);
             if (atual) sessoes.set(id, { ...atual, qr: qrBuffer, status: 'QR_READY' });
         }
 
         if (connection === "open") {
-            console.log(`[SUCESSO] ${id} Conectado!`);
+            console.log(`[CONECTADO] ${id} está online!`);
             const atual = sessoes.get(id);
             if (atual) sessoes.set(id, { ...atual, status: 'CONNECTED', qr: null });
         }
 
         if (connection === "close") {
             const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log(`[FECHOU] ${id}. Reconectar: ${shouldReconnect}`);
+            console.log(`[FECHOU] ${id}. Reconectar? ${shouldReconnect}`);
+            
             if (!shouldReconnect) {
-                sessoes.delete(id);
+                sessoes.delete(id); // Remove da memória
             }
         }
     });
 }
 
-// --- ROTAS DA API ---
+// --- ROTAS ---
 
-// 1. Criar Sessão (POST)
 app.post("/api/session/create", async (req, res) => {
     const { sessionName } = req.body;
     const id = sessionName || uuidv4();
 
-    console.log(`[API] Pedido de criação para: ${id}`);
+    console.log(`[API] Solicitando sessão limpa para: ${id}`);
 
+    // Remove da memória se já existir
     if (sessoes.has(id)) {
-        return res.json({ id, status: "EXISTS", message: "Sessão já existe. Pode buscar o QR." });
+        sessoes.delete(id);
     }
 
+    // Inicia processo
     await criarSessao(id);
     
     res.json({ 
         id, 
         status: "INITIALIZING", 
-        message: "Sessão iniciada. Aguarde 10s e busque o QR Code." 
+        message: "Limpamos a pasta antiga e iniciamos. Aguarde 10s pelo QR." 
     });
 });
 
-// 2. Pegar QR Code (GET)
 app.get("/api/session/:id/qr", (req, res) => {
     const { id } = req.params;
     const sessao = sessoes.get(id);
 
+    // Diagnóstico preciso do erro
     if (!sessao) {
-        return res.status(404).json({ error: "Sessão não encontrada. Faça o POST primeiro." });
+        console.log(`[FALHA GET] Sessão '${id}' não está na memória RAM.`);
+        return res.status(404).json({ error: "Sessão não encontrada na memória. Você fez o POST?" });
     }
+    
     if (!sessao.qr) {
-        return res.status(404).json({ error: "QR ainda não gerado. Aguarde um pouco..." });
+        console.log(`[FALHA GET] Sessão '${id}' existe, mas QR é null.`);
+        return res.status(404).json({ error: "O QR Code ainda não foi gerado. Aguarde mais uns segundos." });
     }
 
+    console.log(`[SUCESSO GET] Entregando imagem para ${id}`);
     res.setHeader("Content-Type", "image/png");
     res.send(sessao.qr);
 });
 
-// 3. Status (GET)
-app.get("/api/session/:id/status", (req, res) => {
-    const { id } = req.params;
-    const sessao = sessoes.get(id);
-    if (!sessao) return res.json({ status: "NOT_FOUND" });
-    res.json({ status: sessao.status });
-});
+// TESTE DE VIDA
+app.get("/", (req, res) => res.send("Servidor Limpo Online"));
 
-// 4. Rota Raiz (Teste)
-app.get("/", (req, res) => {
-    res.send("Servidor API WhatsApp Online! 🚀");
-});
-
-// --- INICIAR SERVIDOR ---
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor rodando limpo na porta ${PORT}`));
