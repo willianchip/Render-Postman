@@ -10,15 +10,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- BANCO DE DADOS NA MEMÓRIA ---
+// --- MAPA DE SESSÕES (MEMÓRIA RAM) ---
 const sessoes = new Map();
 
 // --- FUNÇÃO DE CONEXÃO ---
 async function iniciarBaileys(id) {
-    // 1. Limpeza de Cache (Remove a pasta antiga para forçar QR Novo)
+    // 1. Limpeza de Pasta (Remove sujeira antiga para garantir QR novo)
     const sessionPath = `sessions/${id}`;
+    
+    // Se a pasta existe, deletamos para forçar uma nova tentativa limpa
     if (fs.existsSync(sessionPath)) {
-        console.log(`[RESET] Limpando sessão antiga: ${id}`);
+        console.log(`[LIMPEZA] Removendo sessão antiga: ${id}`);
         fs.rmSync(sessionPath, { recursive: true, force: true });
     }
 
@@ -26,16 +28,16 @@ async function iniciarBaileys(id) {
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
     const { version } = await fetchLatestBaileysVersion();
 
-    console.log(`[START] Iniciando Baileys v${version.join('.')} para ID: ${id}`);
+    console.log(`[INICIO] Iniciando Baileys v${version.join('.')} para ID: ${id}`);
 
-    // 3. Cria o Socket (AQUI ESTÁ O SEGREDO DA CONEXÃO)
+    // 3. Cria o Socket (CONFIGURAÇÃO ANTI-BLOQUEIO RENDER)
     const sock = makeWASocket({
         version,
         auth: state,
         printQRInTerminal: true,
-        logger: pino({ level: 'silent' }), // Log limpo para não travar o Render
-        browser: ["Ubuntu", "Chrome", "20.0.04"], // Navegador Linux padrão
-        connectTimeoutMs: 60000, // Espera até 60s
+        logger: pino({ level: 'silent' }), // Log limpo para não estourar memória
+        browser: ["Ubuntu", "Chrome", "20.0.04"], // Simula Linux Desktop
+        connectTimeoutMs: 60000,
         keepAliveIntervalMs: 10000,
         syncFullHistory: false
     });
@@ -49,7 +51,7 @@ async function iniciarBaileys(id) {
         const { qr, connection, lastDisconnect } = update;
 
         if (qr) {
-            console.log(`[SUCESSO] QR Code gerado para: ${id}`);
+            console.log(`[SUCESSO] QR Code novo gerado para: ${id}`);
             const qrBuffer = await QRCode.toBuffer(qr);
             
             // Atualiza a memória com o QR pronto
@@ -68,8 +70,10 @@ async function iniciarBaileys(id) {
         if (connection === "close") {
             const reason = (lastDisconnect?.error)?.output?.statusCode;
             console.log(`[FECHOU] Motivo: ${reason}`);
+            
+            // Se não for logout manual, deleta para permitir reconexão limpa
             if (reason !== DisconnectReason.loggedOut) {
-                sessoes.delete(id); // Deleta para poder recriar limpo
+                sessoes.delete(id); 
             }
         }
     });
@@ -82,17 +86,19 @@ app.post("/api/session/create", async (req, res) => {
     const { sessionName } = req.body;
     const id = sessionName || "loja1";
 
-    // Se já existe, mata a antiga e cria nova
+    // Se já existe, remove da memória para reiniciar processo
     if (sessoes.has(id)) {
         sessoes.delete(id);
     }
 
     try {
-        iniciarBaileys(id); // Não usamos await aqui para liberar o Postman rápido
+        // Não usamos await no iniciarBaileys para liberar o Postman rápido
+        iniciarBaileys(id); 
+        
         res.json({ 
             id, 
             status: "INITIALIZING", 
-            message: "Processo iniciado. Aguarde 15 segundos e chame o GET." 
+            message: "Processo de criação iniciado. Aguarde 15 segundos e peça o QR." 
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -104,21 +110,19 @@ app.get("/api/session/:id/qr", (req, res) => {
     const { id } = req.params;
     const sessao = sessoes.get(id);
 
-    // Se a sessão nem existe na memória (não fez POST ou o servidor reiniciou)
+    // Se a sessão nem existe na memória
     if (!sessao) {
         return res.status(404).json({ error: "Sessão não encontrada. Faça o POST primeiro." });
     }
 
     // Se a sessão existe, mas o QR ainda é null
     if (!sessao.qr) {
-        // Se já estiver conectado, avisa
         if (sessao.status === 'CONNECTED') {
              return res.status(400).json({ message: "Já está conectado! Não precisa de QR." });
         }
-        // Se ainda estiver carregando
         return res.status(404).json({ 
             error: "QR ainda não gerado.",
-            dica: "O Baileys está carregando. Tente de novo em 5 segundos."
+            dica: "O servidor está lento. Tente de novo em 5 segundos."
         });
     }
 
