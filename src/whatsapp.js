@@ -1,39 +1,44 @@
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason
-} from '@whiskeysockets/baileys';
+} from "@whiskeysockets/baileys";
 
-import QRCode from 'qrcode';
+import P from "pino";
+import qrcode from "qrcode";
+import fs from "fs";
 
-export async function initWhatsApp(name) {
-  const { state, saveCreds } = await useMultiFileAuthState(`sessions/${name}`);
+export async function createWhatsAppSession(sessionId, onQR) {
+  const sessionPath = `sessions/${sessionId}`;
 
-  let qrImage = null;
+  if (!fs.existsSync(sessionPath)) {
+    fs.mkdirSync(sessionPath, { recursive: true });
+  }
+
+  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: true
+    logger: P({ level: "silent" })
   });
 
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on("connection.update", async (update) => {
+    const { connection, qr } = update;
 
-  sock.ev.on('connection.update', async (update) => {
-    if (update.qr) {
-      qrImage = await QRCode.toBuffer(update.qr);
+    if (qr) {
+      const qrBase64 = await qrcode.toDataURL(qr);
+      onQR(qrBase64);
     }
 
-    if (update.connection === 'close') {
-      const reason = update.lastDisconnect?.error?.output?.statusCode;
-      if (reason !== DisconnectReason.loggedOut) {
-        initWhatsApp(name);
-      }
+    if (connection === "open") {
+      console.log(`✅ WhatsApp conectado: ${sessionId}`);
+    }
+
+    if (connection === "close") {
+      console.log(`❌ WhatsApp desconectado: ${sessionId}`);
     }
   });
 
-  return {
-    socket: sock,
-    get qr() {
-      return qrImage;
-    }
-  };
+  sock.ev.on("creds.update", saveCreds);
+
+  return sock;
 }
