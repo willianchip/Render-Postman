@@ -1,5 +1,5 @@
 {
-  "name": "whatsapp-real-api",
+  "name": "whatsapp-api",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
@@ -12,4 +12,3 @@
     "qrcode": "^1.5.4"
   }
 }
-
