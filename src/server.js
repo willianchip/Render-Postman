@@ -1,11 +1,11 @@
 import express from "express";
-import { createSession, getSessionQR } from "./sessions.js";
+import { createSession, getQR } from "./sessions.js";
 
 const app = express();
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.json({ status: "API online" });
+  res.json({ status: "API WhatsApp online" });
 });
 
 app.post("/sessions", async (req, res) => {
@@ -19,14 +19,16 @@ app.post("/sessions", async (req, res) => {
 });
 
 app.get("/sessions/:id/qr", (req, res) => {
-  const qr = getSessionQR(req.params.id);
+  const qr = getQR(req.params.id);
+
   if (!qr) {
     return res.status(404).json({ error: "QR não disponível" });
   }
-  res.json({ qr });
+
+  res.type("png").send(qr);
 });
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
+  console.log("Servidor rodando na porta", PORT);
 });
