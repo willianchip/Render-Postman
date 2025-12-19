@@ -2,13 +2,23 @@ import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason
 } from "@whiskeysockets/baileys";
+import { Boom } from "@hapi/boom";
+import fs from "fs";
+import path from "path";
 
-import qrcode from "qrcode";
+const sessions = {};
 
-export async function startWhatsApp(sessionName) {
-  const { state, saveCreds } = await useMultiFileAuthState(`sessions/${sessionName}`);
+export async function startWhatsApp(sessionId, onQR) {
+  if (sessions[sessionId]) {
+    return sessions[sessionId];
+  }
 
-  let qrBuffer = null;
+  const sessionPath = path.resolve("sessions", sessionId);
+  if (!fs.existsSync(sessionPath)) {
+    fs.mkdirSync(sessionPath, { recursive: true });
+  }
+
+  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
   const sock = makeWASocket({
     auth: state,
@@ -17,29 +27,35 @@ export async function startWhatsApp(sessionName) {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", async (update) => {
-    const { qr, connection, lastDisconnect } = update;
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect, qr } = update;
 
-    if (qr) {
-      qrBuffer = await qrcode.toBuffer(qr);
+    if (qr && onQR) {
+      onQR(qr);
     }
 
     if (connection === "close") {
       const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+        (lastDisconnect?.error instanceof Boom) &&
+        lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut;
 
       if (shouldReconnect) {
-        startWhatsApp(sessionName);
+        delete sessions[sessionId];
+        startWhatsApp(sessionId, onQR);
+      } else {
+        delete sessions[sessionId];
       }
     }
 
     if (connection === "open") {
-      console.log(`WhatsApp conectado: ${sessionName}`);
+      console.log(`✅ WhatsApp conectado: ${sessionId}`);
     }
   });
 
-  return {
-    sock,
-    getQRBuffer: () => qrBuffer
-  };
+  sessions[sessionId] = sock;
+  return sock;
+}
+
+export function getSession(sessionId) {
+  return sessions[sessionId];
 }
