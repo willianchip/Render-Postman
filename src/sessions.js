@@ -1,19 +1,24 @@
-import { createWhatsAppSession } from "./whatsapp.js";
+import { startWhatsApp } from "./whatsapp.js";
 
-const sessions = {};
+const sessions = new Map();
+const qrs = new Map();
 
-export async function createSession(id) {
-  let qrCode = null;
+export async function createSession(name) {
+  if (sessions.has(name)) return;
 
-  const socket = await createWhatsAppSession(id, (qr) => {
-    qrCode = qr;
-  });
+  const { sock, getQRBuffer } = await startWhatsApp(name);
 
-  sessions[id] = { socket, getQR: () => qrCode };
+  sessions.set(name, sock);
+
+  const interval = setInterval(() => {
+    const qr = getQRBuffer();
+    if (qr) {
+      qrs.set(name, qr);
+      clearInterval(interval);
+    }
+  }, 1000);
 }
 
-export function getSessionQR(id) {
-  const session = sessions[id];
-  if (!session) return null;
-  return session.getQR();
+export function getQR(name) {
+  return qrs.get(name);
 }
