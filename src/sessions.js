@@ -1,24 +1,35 @@
 import { startWhatsApp } from "./whatsapp.js";
 
 const sessions = new Map();
-const qrs = new Map();
 
-export async function createSession(name) {
-  if (sessions.has(name)) return;
+export async function createSession(req, res) {
+  const { name } = req.body;
 
-  const { sock, getQRBuffer } = await startWhatsApp(name);
+  if (!name) {
+    return res.status(400).json({ error: "name é obrigatório" });
+  }
 
-  sessions.set(name, sock);
+  if (sessions.has(name)) {
+    return res.json({ status: "já existe", session: name });
+  }
 
-  const interval = setInterval(() => {
-    const qr = getQRBuffer();
-    if (qr) {
-      qrs.set(name, qr);
-      clearInterval(interval);
-    }
-  }, 1000);
+  const session = await startWhatsApp(name);
+  sessions.set(name, session);
+
+  res.json({
+    status: "created",
+    session: name
+  });
 }
 
-export function getQR(name) {
-  return qrs.get(name);
+export function getQR(req, res) {
+  const { id } = req.params;
+
+  const session = sessions.get(id);
+
+  if (!session || !session.qr) {
+    return res.status(404).json({ error: "QR não disponível" });
+  }
+
+  res.json({ qr: session.qr });
 }
