@@ -1,45 +1,56 @@
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason
-} from '@whiskeysockets/baileys';
+} from "@whiskeysockets/baileys";
 
-import QRCode from 'qrcode';
-import fs from 'fs';
-
-const sessions = new Map();
+const sessions = {};
 
 export async function startWhatsApp(sessionId) {
-  if (sessions.has(sessionId)) return sessions.get(sessionId);
+  if (sessions[sessionId]) return sessions[sessionId];
 
-  const authPath = `./sessions/${sessionId}`;
-  fs.mkdirSync(authPath, { recursive: true });
-
-  const { state, saveCreds } = await useMultiFileAuthState(authPath);
+  const { state, saveCreds } = await useMultiFileAuthState(
+    `./sessions/${sessionId}`
+  );
 
   const sock = makeWASocket({
     auth: state,
     printQRInTerminal: true
   });
 
-  sock.ev.on('creds.update', saveCreds);
+  sessions[sessionId] = {
+    sock,
+    qr: null,
+    connected: false
+  };
 
-  sock.ev.on('connection.update', async (update) => {
-    if (update.qr) {
-      const qrPng = await QRCode.toDataURL(update.qr);
-      sessions.set(sessionId, { sock, qr: qrPng });
+  sock.ev.on("connection.update", (update) => {
+    const { qr, connection, lastDisconnect } = update;
+
+    if (qr) {
+      sessions[sessionId].qr = qr;
     }
 
-    if (update.connection === 'close') {
-      if (update.lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
+    if (connection === "open") {
+      sessions[sessionId].connected = true;
+      sessions[sessionId].qr = null;
+      console.log("✅ WhatsApp conectado:", sessionId);
+    }
+
+    if (connection === "close") {
+      const reason =
+        lastDisconnect?.error?.output?.statusCode;
+
+      if (reason !== DisconnectReason.loggedOut) {
         startWhatsApp(sessionId);
       }
     }
   });
 
-  sessions.set(sessionId, { sock, qr: null });
-  return sessions.get(sessionId);
+  sock.ev.on("creds.update", saveCreds);
+
+  return sessions[sessionId];
 }
 
 export function getSession(sessionId) {
-  return sessions.get(sessionId);
+  return sessions[sessionId];
 }
