@@ -1,35 +1,31 @@
-import { startWhatsApp } from "./whatsapp.js";
-
-const sessions = new Map();
+import { startWhatsApp, getSession } from './whatsapp.js';
 
 export async function createSession(req, res) {
-  const { name } = req.body;
+  const { id } = req.body;
 
-  if (!name) {
-    return res.status(400).json({ error: "name é obrigatório" });
+  if (!id) {
+    return res.status(400).json({ error: 'id é obrigatório' });
   }
 
-  if (sessions.has(name)) {
-    return res.json({ status: "já existe", session: name });
-  }
-
-  const session = await startWhatsApp(name);
-  sessions.set(name, session);
+  await startWhatsApp(id);
 
   res.json({
-    status: "created",
-    session: name
+    id,
+    status: 'CREATED'
   });
 }
 
 export function getQR(req, res) {
   const { id } = req.params;
-
-  const session = sessions.get(id);
+  const session = getSession(id);
 
   if (!session || !session.qr) {
-    return res.status(404).json({ error: "QR não disponível" });
+    return res.status(404).json({ error: 'QR não disponível' });
   }
 
-  res.json({ qr: session.qr });
+  const base64 = session.qr.split(',')[1];
+  const buffer = Buffer.from(base64, 'base64');
+
+  res.setHeader('Content-Type', 'image/png');
+  res.send(buffer);
 }
