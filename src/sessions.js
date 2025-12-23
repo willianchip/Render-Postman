@@ -1,31 +1,39 @@
-import { startWhatsApp, getSession } from './whatsapp.js';
+import { startWhatsApp, getSession } from "./whatsapp.js";
 
-export async function createSession(req, res) {
-  const { id } = req.body;
+export function sessionRoutes(app) {
 
-  if (!id) {
-    return res.status(400).json({ error: 'id é obrigatório' });
-  }
+  // CRIAR SESSÃO + INICIAR WHATSAPP
+  app.post("/sessions", async (req, res) => {
+    const { name } = req.body;
 
-  await startWhatsApp(id);
+    if (!name) {
+      return res.status(400).json({ error: "name é obrigatório" });
+    }
 
-  res.json({
-    id,
-    status: 'CREATED'
+    await startWhatsApp(name);
+
+    res.json({
+      status: "started",
+      session: name
+    });
   });
-}
 
-export function getQR(req, res) {
-  const { id } = req.params;
-  const session = getSession(id);
+  // OBTER QR CODE
+  app.get("/sessions/:id/qr", (req, res) => {
+    const session = getSession(req.params.id);
 
-  if (!session || !session.qr) {
-    return res.status(404).json({ error: 'QR não disponível' });
-  }
+    if (!session) {
+      return res.status(404).json({ error: "Sessão não existe" });
+    }
 
-  const base64 = session.qr.split(',')[1];
-  const buffer = Buffer.from(base64, 'base64');
+    if (session.connected) {
+      return res.json({ status: "connected" });
+    }
 
-  res.setHeader('Content-Type', 'image/png');
-  res.send(buffer);
+    if (!session.qr) {
+      return res.status(404).json({ error: "QR não disponível" });
+    }
+
+    res.json({ qr: session.qr });
+  });
 }
