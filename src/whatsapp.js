@@ -1,61 +1,45 @@
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason
-} from "@whiskeysockets/baileys";
-import { Boom } from "@hapi/boom";
-import fs from "fs";
-import path from "path";
+} from '@whiskeysockets/baileys';
 
-const sessions = {};
+import QRCode from 'qrcode';
+import fs from 'fs';
 
-export async function startWhatsApp(sessionId, onQR) {
-  if (sessions[sessionId]) {
-    return sessions[sessionId];
-  }
+const sessions = new Map();
 
-  const sessionPath = path.resolve("sessions", sessionId);
-  if (!fs.existsSync(sessionPath)) {
-    fs.mkdirSync(sessionPath, { recursive: true });
-  }
+export async function startWhatsApp(sessionId) {
+  if (sessions.has(sessionId)) return sessions.get(sessionId);
 
-  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+  const authPath = `./sessions/${sessionId}`;
+  fs.mkdirSync(authPath, { recursive: true });
+
+  const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: false
+    printQRInTerminal: true
   });
 
-  sock.ev.on("creds.update", saveCreds);
+  sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr && onQR) {
-      onQR(qr);
+  sock.ev.on('connection.update', async (update) => {
+    if (update.qr) {
+      const qrPng = await QRCode.toDataURL(update.qr);
+      sessions.set(sessionId, { sock, qr: qrPng });
     }
 
-    if (connection === "close") {
-      const shouldReconnect =
-        (lastDisconnect?.error instanceof Boom) &&
-        lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut;
-
-      if (shouldReconnect) {
-        delete sessions[sessionId];
-        startWhatsApp(sessionId, onQR);
-      } else {
-        delete sessions[sessionId];
+    if (update.connection === 'close') {
+      if (update.lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
+        startWhatsApp(sessionId);
       }
     }
-
-    if (connection === "open") {
-      console.log(`✅ WhatsApp conectado: ${sessionId}`);
-    }
   });
 
-  sessions[sessionId] = sock;
-  return sock;
+  sessions.set(sessionId, { sock, qr: null });
+  return sessions.get(sessionId);
 }
 
 export function getSession(sessionId) {
-  return sessions[sessionId];
+  return sessions.get(sessionId);
 }
